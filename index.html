@@ -1,198 +1,212 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Idea Manager</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
-        .hidden { display: none; }
-        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
-        input, textarea { width: 100%; padding: 8px; margin: 5px 0; box-sizing: border-box; }
-        .idea-card { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px; }
-        .tag { background: #e0e0e0; padding: 3px 8px; margin: 2px; border-radius: 3px; display: inline-block; font-size: 14px; }
-        #login-form { max-width: 300px; margin: 0 auto; }
-    </style>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-    <div id="auth-section">
-        <h1>Idea Manager</h1>
-        <div id="login-form">
-            <input type="email" id="email" placeholder="Email">
-            <input type="password" id="password" placeholder="Password">
-            <button onclick="signIn()">Sign In</button>
-        </div>
-    </div>
 
-    <div id="app-section" class="hidden">
-        <h1>My Ideas</h1>
-        <p>Welcome, <span id="user-email"></span>! <button onclick="signOut()">Sign Out</button></p>
-        
-        <div id="add-idea-form">
-            <h2>Add New Idea</h2>
-            <input type="text" id="idea-name" placeholder="Idea name" required>
-            <textarea id="idea-description" placeholder="Description" rows="3"></textarea>
-            <input type="text" id="idea-tags" placeholder="Tags (comma-separated: birthday, gift, urgent)">
-            <button onclick="addIdea()">Add Idea</button>
-        </div>
+<body class="bg-light">
+    <!-- Toast Container -->
+    <div class="toast-container"></div>
 
-        <div id="filter-section">
-            <h3>Filter by tag:</h3>
-            <input type="text" id="filter-tag" placeholder="Enter tag to filter">
-            <button onclick="filterIdeas()">Filter</button>
-            <button onclick="showAllIdeas()">Show All</button>
-        </div>
-
-        <div id="ideas-list"></div>
-    </div>
-
-    <script>
-        // Replace with your Supabase project details
-        const SUPABASE_URL = 'https://nehlaaelcbmntddqngzo.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5laGxhYWVsY2JtbnRkZHFuZ3pvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk4MzE3OTAsImV4cCI6MjA3NTQwNzc5MH0.JKK9YTCcj2eEV_QtQYconkfPC4YjDUHU6cRwar41Z1w';
-        
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-        // Check if user is logged in on page load
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) {
-                showApp(session.user);
-            }
-        });
-
-        // Listen for auth changes
-        supabase.auth.onAuthStateChange((event, session) => {
-            if (session) {
-                showApp(session.user);
-            } else {
-                showAuth();
-            }
-        });
-
-        async function signIn() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-
-            if (!email || !password) {
-                alert('Please enter email and password');
-                return;
-            }
-
-            const { error } = await supabase.auth.signInWithPassword({
-                email,
-                password
-            });
-
-            if (error) {
-                alert('Error signing in: ' + error.message);
-            }
-        }
-
-        async function signOut() {
-            await supabase.auth.signOut();
-        }
-
-        function showApp(user) {
-            document.getElementById('auth-section').classList.add('hidden');
-            document.getElementById('app-section').classList.remove('hidden');
-            document.getElementById('user-email').textContent = user.email;
-            loadIdeas();
-        }
-
-        function showAuth() {
-            document.getElementById('auth-section').classList.remove('hidden');
-            document.getElementById('app-section').classList.add('hidden');
-        }
-
-        async function addIdea() {
-            const name = document.getElementById('idea-name').value;
-            const description = document.getElementById('idea-description').value;
-            const tagsInput = document.getElementById('idea-tags').value;
-            const tags = tagsInput.split(',').map(t => t.trim()).filter(t => t);
-
-            if (!name) {
-                alert('Please enter an idea name');
-                return;
-            }
-
-            const { data: { user } } = await supabase.auth.getUser();
-            
-            const { error } = await supabase
-                .from('ideas')
-                .insert([{ name, description, tags, user_id: user.id }]);
-
-            if (error) {
-                alert('Error adding idea: ' + error.message);
-            } else {
-                document.getElementById('idea-name').value = '';
-                document.getElementById('idea-description').value = '';
-                document.getElementById('idea-tags').value = '';
-                loadIdeas();
-            }
-        }
-
-        async function loadIdeas(filterTag = null) {
-            let query = supabase.from('ideas').select('*').order('created_at', { ascending: false });
-            
-            if (filterTag) {
-                query = query.contains('tags', [filterTag]);
-            }
-
-            const { data: ideas, error } = await query;
-
-            if (error) {
-                alert('Error loading ideas: ' + error.message);
-                return;
-            }
-
-            displayIdeas(ideas);
-        }
-
-        function displayIdeas(ideas) {
-            const container = document.getElementById('ideas-list');
-            
-            if (ideas.length === 0) {
-                container.innerHTML = '<p>No ideas yet. Add your first one!</p>';
-                return;
-            }
-
-            container.innerHTML = ideas.map(idea => `
-                <div class="idea-card">
-                    <h3>${idea.name}</h3>
-                    <p>${idea.description || 'No description'}</p>
-                    <div>
-                        ${idea.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+    <!-- Login Section -->
+    <div id="auth-section" class="container">
+        <div class="row justify-content-center align-items-center min-vh-100">
+            <div class="col-md-8">
+                <div class="card shadow">
+                    <div class="card-body p-5">
+                        <h1 class="text-center mb-4">Idea Manager</h1>
+                        <form id="login-form" onsubmit="signIn(event)">
+                            <div class="mb-3">
+                                <label for="email" class="form-label">E-Mail Adresse</label>
+                                <input type="email" class="form-control" id="email" placeholder="E-Mail Adresse"
+                                    required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Passwort</label>
+                                <input type="password" class="form-control" id="password" placeholder="Passwort"
+                                    required>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Anmelden</button>
+                        </form>
                     </div>
-                    <small>Created: ${new Date(idea.created_at).toLocaleDateString()}</small>
-                    <button onclick="deleteIdea('${idea.id}')">Delete</button>
                 </div>
-            `).join('');
-        }
+            </div>
+        </div>
+    </div>
 
-        async function deleteIdea(id) {
-            if (!confirm('Delete this idea?')) return;
-            
-            const { error } = await supabase.from('ideas').delete().eq('id', id);
-            
-            if (error) {
-                alert('Error deleting idea: ' + error.message);
-            } else {
-                loadIdeas();
-            }
-        }
+    <!-- App Section -->
+    <div id="app-section" class="d-none">
+        <!-- Navbar -->
+        <nav class="navbar navbar-dark bg-primary">
+            <div class="container-fluid">
+                <span class="navbar-brand mb-0 h1">
+                    <i class="bi bi-lightbulb"></i> Idea Manager
+                </span>
+                <div class="d-flex align-items-center text-white">
+                    <button id="theme-toggle" class="btn btn-outline-light btn-sm me-3" onclick="toggleTheme()">
+                        <i class="bi bi-moon-fill"></i>
+                    </button>
+                    <button class="btn btn-outline-light btn-sm me-3" onclick="exportIdeas()">
+                        <i class="bi bi-download"></i> Exportieren
+                    </button>
+                    <span class="me-3"><i class="bi bi-person-circle"></i> <span id="user-email"></span></span>
+                    <button onclick="signOut()" class="btn btn-outline-light btn-sm">Abmelden</button>
+                </div>
+            </div>
+        </nav>
 
-        function filterIdeas() {
-            const tag = document.getElementById('filter-tag').value.trim();
-            if (tag) {
-                loadIdeas(tag);
-            }
-        }
+        <div class="container my-4">
+            <!-- Add/Edit Idea Form -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <button class="btn btn-link text-decoration-none p-0 w-100 text-start" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#addIdeaCollapse" aria-expanded="false"
+                        aria-controls="addIdeaCollapse">
+                        <h5 class="mb-0">
+                            <i class="bi bi-plus-circle"></i> <span id="form-title">Neue Idee hinzufügen</span>
+                            <i class="bi bi-chevron-down float-end"></i>
+                        </h5>
+                    </button>
+                </div>
+                <div class="collapse" id="addIdeaCollapse">
+                    <div class="card-body">
+                        <form id="idea-form" onsubmit="saveIdea(event)">
+                            <input type="hidden" id="edit-idea-id">
+                            <div class="mb-3">
+                                <label for="idea-name" class="form-label">Ideenname</label>
+                                <input type="text" class="form-control" id="idea-name" placeholder="Geben Sie den Ideenname ein"
+                                    required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="idea-description" class="form-label">Beschreibung</label>
+                                <textarea class="form-control" id="idea-description" rows="3"
+                                    placeholder="Geben Sie die Beschreibung ein"></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="idea-tags" class="form-label">Tags</label>
+                                <input type="text" class="form-control" id="idea-tags"
+                                    placeholder="geburtstag, geschenk, dringend">
+                                <small class="form-text text-muted">Tags mit Kommas trennen</small>
+                            </div>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="idea-archived">
+                                    <label class="form-check-label" for="idea-archived">
+                                        Als abgeschlossen/archiviert markieren
+                                    </label>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> <span id="save-button-text">Idee hinzufügen</span>
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="cancel-edit-btn" style="display: none;"
+                                onclick="cancelEdit()">
+                                Abbrechen
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
 
-        function showAllIdeas() {
-            document.getElementById('filter-tag').value = '';
-            loadIdeas();
-        }
-    </script>
+            <!-- Filter Section -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label fw-bold mb-0">Filter nach Tag</label>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="show-archived"
+                                onchange="toggleArchived()">
+                            <label class="form-check-label" for="show-archived">
+                                Archivierte anzeigen
+                            </label>
+                        </div>
+                    </div>
+                    <div id="popular-tags" class="mb-3"></div>
+                    <div class="row align-items-end">
+                        <div class="col-md-8">
+                            <input type="text" class="form-control" id="filter-tag" placeholder="Oder benutzerdefinierten Tag eingeben"
+                                oninput="debounceFilter()">
+                        </div>
+                        <div class="col-md-4">
+                            <button onclick="filterIdeas()" class="btn btn-secondary me-2">
+                                <i class="bi bi-funnel"></i> Filtern
+                            </button>
+                            <button onclick="showAllIdeas()" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-counterclockwise"></i> Zurücksetzen
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ideas List -->
+            <div id="ideas-list">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Lade...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteModalLabel">Löschen bestätigen</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Sind Sie sicher, dass Sie "<span id="delete-idea-name"></span>" löschen möchten?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                    <button type="button" class="btn btn-danger" onclick="confirmDelete()">Löschen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Export Modal -->
+    <div class="modal fade" id="exportModal" tabindex="-1" aria-labelledby="exportModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="exportModalLabel">
+                        <i class="bi bi-download"></i> Ideen exportieren
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Wählen Sie das Exportformat für Ihre Ideen:</p>
+                    <div class="d-grid gap-3">
+                        <button class="btn btn-outline-primary btn-lg" onclick="exportFormat('json')">
+                            <i class="bi bi-file-earmark-code"></i> Als JSON exportieren
+                            <small class="d-block text-muted">Maschinenlesbares Format</small>
+                        </button>
+                        <button class="btn btn-outline-success btn-lg" onclick="exportFormat('csv')">
+                            <i class="bi bi-file-earmark-spreadsheet"></i> Als CSV exportieren
+                            <small class="d-block text-muted">In Excel oder Google Sheets öffnen</small>
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="scripts.js"></script>
 </body>
+
 </html>
