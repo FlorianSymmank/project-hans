@@ -265,6 +265,23 @@ function displayPopularTags(tags) {
     }).join('');
 }
 
+function formatDescription(text) {
+    if (!text) return '';
+
+    // Zeilenumbrüche in <br> umwandeln
+    let formattedText = text.replace(/\r?\n/g, '<br>');
+
+    // Regex für URLs
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+    // URLs durch klickbare Links ersetzen
+    formattedText = formattedText.replace(urlRegex, (url) => {
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+    });
+
+    return formattedText;
+}
+
 function filterByTag(tag) {
     const filterInput = document.getElementById('filter-tag');
     const currentTags = filterInput.value.split(',').map(t => t.trim()).filter(t => t);
@@ -319,7 +336,7 @@ function displayIdeas(ideas, filterTags = null) {
                         ${archivedBadge}
                         ${idea.name}
                     </h5>
-                    <p class="card-text text-muted">${idea.description || 'No description'}</p>
+                    <p class="card-text text-muted">${formatDescription(idea.description) || 'Keine Beschreibung'}</p>
                     <div class="mb-2">
                         ${idea.tags.map(tag => `<span class="badge bg-secondary me-1" role="button" onclick="filterByTag('${tag}')" style="cursor: pointer;">${tag}</span>`).join('')}
                     </div>
