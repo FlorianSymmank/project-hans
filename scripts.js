@@ -39,7 +39,7 @@ async function signIn(event) {
     });
 
     if (error) {
-        showToast('Error signing in: ' + error.message, 'danger');
+        showToast('Fehler beim Anmelden: ' + error.message, 'danger');
     }
 }
 
@@ -244,7 +244,7 @@ function displayPopularTags(tags) {
     const container = document.getElementById('popular-tags');
 
     if (tags.length === 0) {
-        container.innerHTML = '<small class="text-muted">No tags yet</small>';
+        container.innerHTML = '<small class="text-muted">Noch keine Tags vorhanden</small>';
         return;
     }
 
