@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Idea Manager</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        .hidden { display: none; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        input, textarea { width: 100%; padding: 8px; margin: 5px 0; box-sizing: border-box; }
+        .idea-card { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .tag { background: #e0e0e0; padding: 3px 8px; margin: 2px; border-radius: 3px; display: inline-block; font-size: 14px; }
+        #login-form { max-width: 300px; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <div id="auth-section">
+        <h1>Idea Manager</h1>
+        <div id="login-form">
+            <input type="email" id="email" placeholder="Email">
+            <input type="password" id="password" placeholder="Password">
+            <button onclick="signIn()">Sign In</button>
+        </div>
+    </div>
+
+    <div id="app-section" class="hidden">
+        <h1>My Ideas</h1>
+        <p>Welcome, <span id="user-email"></span>! <button onclick="signOut()">Sign Out</button></p>
+        
+        <div id="add-idea-form">
+            <h2>Add New Idea</h2>
+            <input type="text" id="idea-name" placeholder="Idea name" required>
+            <textarea id="idea-description" placeholder="Description" rows="3"></textarea>
+            <input type="text" id="idea-tags" placeholder="Tags (comma-separated: birthday, gift, urgent)">
+            <button onclick="addIdea()">Add Idea</button>
+        </div>
+
+        <div id="filter-section">
+            <h3>Filter by tag:</h3>
+            <input type="text" id="filter-tag" placeholder="Enter tag to filter">
+            <button onclick="filterIdeas()">Filter</button>
+            <button onclick="showAllIdeas()">Show All</button>
+        </div>
+
+        <div id="ideas-list"></div>
+    </div>
+
+    <script>
+        // Replace with your Supabase project details
+        const SUPABASE_URL = 'https://nehlaaelcbmntddqngzo.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5laGxhYWVsY2JtbnRkZHFuZ3pvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk4MzE3OTAsImV4cCI6MjA3NTQwNzc5MH0.JKK9YTCcj2eEV_QtQYconkfPC4YjDUHU6cRwar41Z1w';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Check if user is logged in on page load
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) {
+                showApp(session.user);
+            }
+        });
+
+        // Listen for auth changes
+        supabase.auth.onAuthStateChange((event, session) => {
+            if (session) {
+                showApp(session.user);
+            } else {
+                showAuth();
+            }
+        });
+
+        async function signIn() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (!email || !password) {
+                alert('Please enter email and password');
+                return;
+            }
+
+            const { error } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            });
+
+            if (error) {
+                alert('Error signing in: ' + error.message);
+            }
+        }
+
+        async function signOut() {
+            await supabase.auth.signOut();
+        }
+
+        function showApp(user) {
+            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('app-section').classList.remove('hidden');
+            document.getElementById('user-email').textContent = user.email;
+            loadIdeas();
+        }
+
+        function showAuth() {
+            document.getElementById('auth-section').classList.remove('hidden');
+            document.getElementById('app-section').classList.add('hidden');
+        }
+
+        async function addIdea() {
+            const name = document.getElementById('idea-name').value;
+            const description = document.getElementById('idea-description').value;
+            const tagsInput = document.getElementById('idea-tags').value;
+            const tags = tagsInput.split(',').map(t => t.trim()).filter(t => t);
+
+            if (!name) {
+                alert('Please enter an idea name');
+                return;
+            }
+
+            const { data: { user } } = await supabase.auth.getUser();
+            
+            const { error } = await supabase
+                .from('ideas')
+                .insert([{ name, description, tags, user_id: user.id }]);
+
+            if (error) {
+                alert('Error adding idea: ' + error.message);
+            } else {
+                document.getElementById('idea-name').value = '';
+                document.getElementById('idea-description').value = '';
+                document.getElementById('idea-tags').value = '';
+                loadIdeas();
+            }
+        }
+
+        async function loadIdeas(filterTag = null) {
+            let query = supabase.from('ideas').select('*').order('created_at', { ascending: false });
+            
+            if (filterTag) {
+                query = query.contains('tags', [filterTag]);
+            }
+
+            const { data: ideas, error } = await query;
+
+            if (error) {
+                alert('Error loading ideas: ' + error.message);
+                return;
+            }
+
+            displayIdeas(ideas);
+        }
+
+        function displayIdeas(ideas) {
+            const container = document.getElementById('ideas-list');
+            
+            if (ideas.length === 0) {
+                container.innerHTML = '<p>No ideas yet. Add your first one!</p>';
+                return;
+            }
+
+            container.innerHTML = ideas.map(idea => `
+                <div class="idea-card">
+                    <h3>${idea.name}</h3>
+                    <p>${idea.description || 'No description'}</p>
+                    <div>
+                        ${idea.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                    </div>
+                    <small>Created: ${new Date(idea.created_at).toLocaleDateString()}</small>
+                    <button onclick="deleteIdea('${idea.id}')">Delete</button>
+                </div>
+            `).join('');
+        }
+
+        async function deleteIdea(id) {
+            if (!confirm('Delete this idea?')) return;
+            
+            const { error } = await supabase.from('ideas').delete().eq('id', id);
+            
+            if (error) {
+                alert('Error deleting idea: ' + error.message);
+            } else {
+                loadIdeas();
+            }
+        }
+
+        function filterIdeas() {
+            const tag = document.getElementById('filter-tag').value.trim();
+            if (tag) {
+                loadIdeas(tag);
+            }
+        }
+
+        function showAllIdeas() {
+            document.getElementById('filter-tag').value = '';
+            loadIdeas();
+        }
+    </script>
+</body>
+</html>
